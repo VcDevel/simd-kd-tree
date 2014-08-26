@@ -29,15 +29,17 @@
 #include <random>
 #include <stdexcept>
 
+#include "../tsc.h"
+
 template <typename T, typename... Args> std::unique_ptr<T> make_unique(Args &&... args)
 {
     return std::unique_ptr<T>{new T{std::forward<Args>(args)...}};
 }
 
 struct Point {
-    Point() = default;
-    Point(const Point &) = default;
-    Point(Point &&) = default;
+    //Point() = default;
+    //Point(const Point &) = default;
+    //Point(Point &&) = default;
     std::array<int, 3> coordinate;
 
     friend std::ostream &operator<<(std::ostream &out, const Point &p)
@@ -176,20 +178,53 @@ public:
 int main()
 {
     KdTree<3, Point> pointsTree;
+    std::vector<Point> pointsVector;
+    pointsVector.reserve(20000);
+
+    std::vector<Point> searchPoints;
+    searchPoints.reserve(20000);
 
     std::default_random_engine randomEngine(1);
     std::uniform_int_distribution<int> uniform(0, 99);
 
-    for (int i = 0; i < 20; ++i) {
-        pointsTree.insert(Point{{{uniform(randomEngine), uniform(randomEngine), uniform(randomEngine)}}});
+    for (int i = 0; i < 20000; ++i) {
+        const Point p{{{uniform(randomEngine), uniform(randomEngine), uniform(randomEngine)}}};
+        pointsTree.insert(p);
+        pointsVector.push_back(p);
     }
-    std::cout << pointsTree << '\n';
+    //std::cout << pointsTree << '\n';
 
-    for (int i = 0; i < 20; ++i) {
-        Point p{{{uniform(randomEngine), uniform(randomEngine), uniform(randomEngine)}}};
-        const auto &p2 = pointsTree.findNearest(p);
-        std::cout << "looking near " << p << ", found " << p2 << ", distance " << get_kdtree_distance(p, p2) << '\n';
+    for (int i = 0; i < 20000; ++i) {
+        searchPoints.push_back({{{uniform(randomEngine), uniform(randomEngine), uniform(randomEngine)}}});
     }
+
+    TimeStampCounter tsc;
+    tsc.start();
+    for (int i = 0; i < 20000; ++i) {
+        const Point &p = searchPoints[i];
+        const auto &p2 = pointsTree.findNearest(p);
+        asm(""::"m"(p2));
+        //std::cout << "looking near " << p << ", found " << p2 << ", distance " << get_kdtree_distance(p, p2) << '\n';
+    }
+    tsc.stop();
+    std::cout << tsc.cycles() << " cycles\n";
+
+    tsc.start();
+    for (int i = 0; i < 20000; ++i) {
+        const Point &x = searchPoints[i];
+        int bestDistance = std::numeric_limits<int>::max();
+        Point p2;
+        for (const auto &p : pointsVector) {
+            const int d = get_kdtree_distance(p, x);
+            if (d < bestDistance) {
+                bestDistance = d;
+                p2 = p;
+            }
+        }
+        asm(""::"m"(p2));
+    }
+    tsc.stop();
+    std::cout << tsc.cycles() << " cycles\n";
 
     return 0;
 }
