@@ -109,6 +109,8 @@ macro(build_example name)
    vc_add_run_target("${name}_default")
 endmacro(build_example)
 
+build_example(kdtree main.cpp)
+
 add_executable(simdize test.cpp)
 add_target_property(simdize COMPILE_FLAGS "${Vc_ARCHITECTURE_FLAGS}")
 add_target_property(simdize LABELS "other")
