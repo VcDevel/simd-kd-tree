@@ -254,6 +254,12 @@ int main()
         const auto &p = searchPoints[i];
         const auto &p2 = pointsVector.findNearest(p);
         asm(""::"m"(p2));
+#ifdef COMPARE_KDTREE_LINEAR
+        const auto &p3 = pointsTree.findNearest(p);
+        if (get_kdtree_distance(p, p2) != get_kdtree_distance(p, p3)) {
+            std::cerr << p << " failed " << p2 << p3 << '\n';
+        }
+#endif
     }
     tsc.stop();
     const auto time_linear = tsc.cycles();
