@@ -25,6 +25,7 @@
 //#include <Vc/Vc>
 #include <array>
 #include <iostream>
+#include <iomanip>
 #include <memory>
 #include <random>
 #include <stdexcept>
@@ -175,56 +176,91 @@ public:
     }
 };
 
-int main()
+template <typename T> class LinearNeighborSearch
 {
-    KdTree<3, Point> pointsTree;
-    std::vector<Point> pointsVector;
-    pointsVector.reserve(20000);
+public:
+    LinearNeighborSearch() = default;
+    LinearNeighborSearch(std::size_t reserve) { m_data.reserve(reserve); }
 
-    std::vector<Point> searchPoints;
-    searchPoints.reserve(20000);
-
-    std::default_random_engine randomEngine(1);
-    std::uniform_int_distribution<int> uniform(0, 99);
-
-    for (int i = 0; i < 20000; ++i) {
-        const Point p{{{uniform(randomEngine), uniform(randomEngine), uniform(randomEngine)}}};
-        pointsTree.insert(p);
-        pointsVector.push_back(p);
-    }
-    //std::cout << pointsTree << '\n';
-
-    for (int i = 0; i < 20000; ++i) {
-        searchPoints.push_back({{{uniform(randomEngine), uniform(randomEngine), uniform(randomEngine)}}});
-    }
-
-    TimeStampCounter tsc;
-    tsc.start();
-    for (int i = 0; i < 20000; ++i) {
-        const Point &p = searchPoints[i];
-        const auto &p2 = pointsTree.findNearest(p);
-        asm(""::"m"(p2));
-        //std::cout << "looking near " << p << ", found " << p2 << ", distance " << get_kdtree_distance(p, p2) << '\n';
-    }
-    tsc.stop();
-    std::cout << tsc.cycles() << " cycles\n";
-
-    tsc.start();
-    for (int i = 0; i < 20000; ++i) {
-        const Point &x = searchPoints[i];
-        int bestDistance = std::numeric_limits<int>::max();
-        Point p2;
-        for (const auto &p : pointsVector) {
-            const int d = get_kdtree_distance(p, x);
+    template <typename U> void insert(U &&x) { m_data.push_back(std::forward<U>(x)); }
+    T findNearest(const T &x) const
+    {
+        /*
+        auto bestDistance = get_kdtree_distance(m_data[0], x);
+        std::size_t best = 0;
+        for (std::size_t i = 1; i < m_data.size(); ++i) {
+            const auto d = get_kdtree_distance(m_data[i], x);
+            if (d < bestDistance) {
+                bestDistance = d;
+                best = i;
+            }
+        }
+        return m_data[best];
+        */
+        using TT = decltype(get_kdtree_distance(x, x));
+        TT bestDistance = std::numeric_limits<TT>::max();
+        T p2;
+        for (const auto &p : m_data) {
+            const auto d = get_kdtree_distance(p, x);
             if (d < bestDistance) {
                 bestDistance = d;
                 p2 = p;
             }
         }
+        return p2;
+    }
+
+private:
+    std::vector<T> m_data;
+};
+
+int main()
+{
+    constexpr int SetSize = 20000;
+    constexpr int NumberOfSearches = 50000;
+
+    std::default_random_engine randomEngine(1);
+    std::uniform_int_distribution<int> uniform(0, 99);
+
+    KdTree<3, Point> pointsTree;
+    LinearNeighborSearch<Point> pointsVector(SetSize);
+    for (int i = 0; i < SetSize; ++i) {
+        const Point p{{{uniform(randomEngine), uniform(randomEngine), uniform(randomEngine)}}};
+        pointsTree.insert(p);
+        pointsVector.insert(p);
+    }
+    //std::cout << pointsTree << '\n';
+
+    std::vector<Point<float>> searchPoints;
+    searchPoints.reserve(NumberOfSearches);
+    for (int i = 0; i < NumberOfSearches; ++i) {
+        searchPoints.push_back({{{uniform(randomEngine), uniform(randomEngine), uniform(randomEngine)}}});
+    }
+
+    TimeStampCounter tsc;
+    tsc.start();
+    for (int i = 0; i < NumberOfSearches; ++i) {
+        const auto &p = searchPoints[i];
+        const auto &p2 = pointsTree.findNearest(p);
+        asm(""::"m"(p2));
+        //std::cout << "looking near " << p << ", found " << p2 << ", distance " << get_kdtree_distance(p, p2) << '\n';
+    }
+    tsc.stop();
+    const auto time_kdtree = tsc.cycles();
+
+    tsc.start();
+    for (int i = 0; i < NumberOfSearches; ++i) {
+        const auto &p = searchPoints[i];
+        const auto &p2 = pointsVector.findNearest(p);
         asm(""::"m"(p2));
     }
     tsc.stop();
-    std::cout << tsc.cycles() << " cycles\n";
+    const auto time_linear = tsc.cycles();
+
+    std::cout << "kd-tree: " << std::setw(11) << time_kdtree
+              << "\n linear: " << std::setw(11) << time_linear
+              << "\n  ratio: " << std::setw(11)
+              << double(time_linear) / double(time_kdtree) << '\n';
 
     return 0;
 }
