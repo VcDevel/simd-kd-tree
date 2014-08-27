@@ -64,6 +64,13 @@ template <std::size_t Plane, typename T> T get_kdtree_value(const Point<T> &p)
     return p.coordinate[Plane];
 }
 
+template <std::size_t Plane, typename T>
+T get_kdtree_1dim_distance(const Point<T> &p0, const Point<T> &p1)
+{
+    const auto dx = get_kdtree_value<Plane>(p0) - get_kdtree_value<Plane>(p1);
+    return dx * dx;
+}
+
 template <std::size_t Dimensions, typename T> class KdTree
 {
     template <std::size_t SplittingPlane> struct Node;
@@ -137,9 +144,8 @@ template <std::size_t Dimensions, typename T> class KdTree
                 // nearest neighbor, but only if the shortest distance of the search point
                 // x to the splitting plane is less than the distance to the current
                 // candidate.
-                const auto dx = get_kdtree_value<SplittingPlane>(x) -
-                                get_kdtree_value<SplittingPlane>(m_data);
-                if (dx * dx < get_kdtree_distance(x, *candidate)) {
+                const auto dx = get_kdtree_1dim_distance<SplittingPlane>(x, m_data);
+                if (dx < get_kdtree_distance(x, *candidate)) {
                     candidate =
                         &selectCloser(x, m_child[index ^ 1]->findNearest(x), *candidate);
                 }
