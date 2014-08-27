@@ -37,11 +37,12 @@ template <typename T, typename... Args> std::unique_ptr<T> make_unique(Args &&..
     return std::unique_ptr<T>{new T{std::forward<Args>(args)...}};
 }
 
+template<typename T>
 struct Point {
     //Point() = default;
     //Point(const Point &) = default;
     //Point(Point &&) = default;
-    std::array<int, 3> coordinate;
+    std::array<T, 3> coordinate;
 
     friend std::ostream &operator<<(std::ostream &out, const Point &p)
     {
@@ -49,7 +50,7 @@ struct Point {
                    << p.coordinate[2] << ']';
     }
 
-    friend int get_kdtree_distance(const Point &p0, const Point &p1)
+    friend T get_kdtree_distance(const Point &p0, const Point &p1)
     {
         const auto dx = p0.coordinate[0] - p1.coordinate[0];
         const auto dy = p0.coordinate[1] - p1.coordinate[1];
@@ -58,7 +59,7 @@ struct Point {
     }
 };
 
-template <std::size_t Plane> int get_kdtree_value(const Point &p)
+template <std::size_t Plane, typename T> T get_kdtree_value(const Point<T> &p)
 {
     return p.coordinate[Plane];
 }
@@ -220,12 +221,12 @@ int main()
     constexpr int NumberOfSearches = 50000;
 
     std::default_random_engine randomEngine(1);
-    std::uniform_int_distribution<int> uniform(0, 99);
+    std::uniform_real_distribution<float> uniform(-99, 99);
 
-    KdTree<3, Point> pointsTree;
-    LinearNeighborSearch<Point> pointsVector(SetSize);
+    KdTree<3, Point<float>> pointsTree;
+    LinearNeighborSearch<Point<float>> pointsVector(SetSize);
     for (int i = 0; i < SetSize; ++i) {
-        const Point p{{{uniform(randomEngine), uniform(randomEngine), uniform(randomEngine)}}};
+        const Point<float> p{{{uniform(randomEngine), uniform(randomEngine), uniform(randomEngine)}}};
         pointsTree.insert(p);
         pointsVector.insert(p);
     }
