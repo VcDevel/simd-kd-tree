@@ -99,7 +99,7 @@ T get_kdtree_1dim_distance(const Point<T> &p0, const Point<T> &p1)
 }
 
 // class KdTreeV {{{1
-template <std::size_t Dimensions, typename T> class KdTreeV
+template <typename T, std::size_t Dimensions = std::tuple_size<T>::value> class KdTreeV
 {
     using V = simdize<T>;
     using OneDimV = typename V::FirstVectorType;
@@ -321,7 +321,7 @@ public: //{{{2
 };
 
 // class KdTree {{{1
-template <std::size_t Dimensions, typename T> class KdTree
+template <typename T, std::size_t Dimensions = std::tuple_size<T>::value> class KdTree
 {
     template <std::size_t SplittingPlane> struct Node;
     template <std::size_t SplittingPlane>
@@ -483,8 +483,8 @@ int main() //{{{1
     std::default_random_engine randomEngine(1);
     std::uniform_real_distribution<T> uniform(-99, 99);
 
-    KdTree<3, Point> pointsTree;
-    KdTreeV<3, Point> pointsTreeV;
+    KdTree<Point> pointsTree;
+    KdTreeV<Point> pointsTreeV;
     LinearNeighborSearch<Point> pointsVector(SetSize);
     for (int i = 0; i < SetSize; ++i) {
         const Point p{uniform(randomEngine), uniform(randomEngine), uniform(randomEngine)};
