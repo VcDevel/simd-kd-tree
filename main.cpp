@@ -43,25 +43,35 @@ template <typename T> class Point
 {
     std::array<T, 3> coordinate;
 
-    friend std::ostream &operator<<(std::ostream &out, const Point &p)
+public:
+    template <typename... Us> Point(Us &&... init) : coordinate{{std::forward<Us>(init)...}}
     {
-        return out << '[' << p.coordinate[0] << ' ' << p.coordinate[1] << ' '
-                   << p.coordinate[2] << ']';
     }
 
-    friend T get_kdtree_distance(const Point &p0, const Point &p1)
-    {
-        const auto dx = p0.coordinate[0] - p1.coordinate[0];
-        const auto dy = p0.coordinate[1] - p1.coordinate[1];
-        const auto dz = p0.coordinate[2] - p1.coordinate[2];
-        return dx * dx + dy * dy + dz * dz;
-    }
+    Point() = default;
+
+    T &operator[](std::size_t i) noexcept { return coordinate[i]; }
+    const T &operator[](std::size_t i) const noexcept { return coordinate[i]; }
 };
+
+template <typename T> std::ostream &operator<<(std::ostream &out, const Point<T> &p)
+{
+    return out << '[' << p[0] << ' ' << p[1] << ' ' << p[2] << ']';
+}
+
+// get_kdtree_distance {{{1
+template <typename T> T get_kdtree_distance(const Point<T> &p0, const Point<T> &p1)
+{
+    const auto dx = p0[0] - p1[0];
+    const auto dy = p0[1] - p1[1];
+    const auto dz = p0[2] - p1[2];
+    return dx * dx + dy * dy + dz * dz;
+}
 
 // get_kdtree_value {{{1
 template <std::size_t Plane, typename T> T get_kdtree_value(const Point<T> &p)
 {
-    return p.coordinate[Plane];
+    return p[Plane];
 }
 
 // get_kdtree_1dim_distance {{{1
@@ -235,7 +245,7 @@ int main() //{{{1
     KdTree<3, Point<float>> pointsTree;
     LinearNeighborSearch<Point<float>> pointsVector(SetSize);
     for (int i = 0; i < SetSize; ++i) {
-        const Point<float> p{{{uniform(randomEngine), uniform(randomEngine), uniform(randomEngine)}}};
+        const Point<float> p{uniform(randomEngine), uniform(randomEngine), uniform(randomEngine)};
         pointsTree.insert(p);
         pointsVector.insert(p);
     }
@@ -244,7 +254,7 @@ int main() //{{{1
     std::vector<Point<float>> searchPoints;
     searchPoints.reserve(NumberOfSearches);
     for (int i = 0; i < NumberOfSearches; ++i) {
-        searchPoints.push_back({{{uniform(randomEngine), uniform(randomEngine), uniform(randomEngine)}}});
+        searchPoints.push_back({uniform(randomEngine), uniform(randomEngine), uniform(randomEngine)});
     }
 
     TimeStampCounter tsc;
