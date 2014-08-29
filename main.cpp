@@ -22,7 +22,6 @@
 
 */
 
-//#include <Vc/Vc>
 #include <array>
 #include <iostream>
 #include <iomanip>
@@ -31,6 +30,7 @@
 #include <stdexcept>
 
 #include "../tsc.h"
+#include "simdize.h"
 
 // make_unique {{{1
 template <typename T, typename... Args> std::unique_ptr<T> make_unique(Args &&... args)
@@ -59,6 +59,22 @@ template <typename T> std::ostream &operator<<(std::ostream &out, const Point<T>
     return out << '[' << p[0] << ' ' << p[1] << ' ' << p[2] << ']';
 }
 
+// tuple interface to Point<T> {{{1
+namespace std
+{
+template <typename T>
+struct tuple_size<Point<T>> : public std::integral_constant<std::size_t, 3>{};
+template <std::size_t I, typename T> struct tuple_element<I, Point<T>>
+{
+    typedef T type;
+};
+}  // namespace std
+template <std::size_t I, typename T> T &get(Point<T> &x) noexcept { return x[I]; }
+template <std::size_t I, typename T> const T &get(const Point<T> &x) noexcept
+{
+    return x[I];
+}
+
 // get_kdtree_distance {{{1
 template <typename T> T get_kdtree_distance(const Point<T> &p0, const Point<T> &p1)
 {
@@ -81,6 +97,228 @@ T get_kdtree_1dim_distance(const Point<T> &p0, const Point<T> &p1)
     const auto dx = get_kdtree_value<Plane>(p0) - get_kdtree_value<Plane>(p1);
     return dx * dx;
 }
+
+// class KdTreeV {{{1
+template <std::size_t Dimensions, typename T> class KdTreeV
+{
+    using V = simdize<T>;
+    using OneDimV = typename V::FirstVectorType;
+
+    template <std::size_t SplittingPlane> struct Node;
+    template <std::size_t SplittingPlane>
+    using NodePtr = std::unique_ptr<Node<SplittingPlane>>;
+
+    template <std::size_t SplittingPlane> struct Node : public V {
+        // Node ChildSplittingPlane {{{2
+        /// the template parameter to child Node objects
+        static constexpr std::size_t ChildSplittingPlane =
+            (SplittingPlane + 1) % Dimensions;
+        // Node ChildPtr {{{2
+        /// unique_ptr type for the children
+        using ChildPtr = NodePtr<ChildSplittingPlane>;
+
+        // Node data members {{{2
+        std::array<ChildPtr, 2> m_child;
+        int m_entries;
+
+        // Node(T) {{{2
+        /// create a new leaf node with payload \p x
+        Node(const T &x)
+            : V(x)     // broadcast to all entries
+            , m_entries(1)  // but mark that only the first entry is valid
+        {}
+
+        // Node::insert {{{2
+        /// check whether \p x needs to go left or right and hand it off or create a new
+        /// leaf node
+        void insert(const T &x)
+        {
+            using namespace std;
+            const auto less = get_kdtree_value<SplittingPlane>(*this) <
+                              get_kdtree_value<SplittingPlane>(V(x));
+            //cerr << SplittingPlane << '|' << setw(10) << x[SplittingPlane] << ' ' << less << ' ' << *this[SplittingPlane];
+            if (m_entries < V::Size) {
+                if (any_of(less)) {
+                    if (all_of(less)) {
+                        //cerr << " (1)";
+                        for (int i = 0; i < Dimensions; ++i) {
+                            (*this)[i][m_entries] = x[i];
+                        }
+                    } else {
+                        int pos = (!less).firstOne();
+                        //cerr << " (2) " << pos;
+                        for (int i = 0; i < Dimensions; ++i) {
+                            where(OneDimV::IndexesFromZero() > pos) | (*this)[i] =
+                                (*this)[i].shifted(-1);
+                            (*this)[i][pos] = x[i];
+                        }
+                    }
+                } else {
+                    //cerr << " (3)";
+                    for (int i = 0; i < Dimensions; ++i) {
+                        (*this)[i] = (*this)[i].shifted(-1);
+                        (*this)[i][0] = x[i];
+                    }
+                }
+                ++m_entries;
+                //cerr << ' ' << (*this)[SplittingPlane] << ' ' << m_entries << '\n';
+            } else {
+                if (all_of(less)) {
+                    //cerr << " (4)\n";
+                    // needs to go to the left child node
+                    if (m_child[0]) {
+                        m_child[0]->insert(x);
+                    } else {
+                        m_child[0] = make_unique<Node<ChildSplittingPlane>>(x);
+                    }
+                } else if (none_of(less)) {
+                    //cerr << " (5)\n";
+                    // needs to go to the right child node
+                    if (m_child[1]) {
+                        m_child[1]->insert(x);
+                    } else {
+                        m_child[1] = make_unique<Node<ChildSplittingPlane>>(x);
+                    }
+                } else {
+                    // The new value must go into this node. The value it pushes out of (*this) could
+                    // go to either the left or the right child - depending on what side we want to
+                    // push out. Determine the bias from the position.
+                    int pos = (!less).firstOne();
+                    T new_x;
+                    if (pos <= V::Size / 2) {
+                        pos -= 1;
+                        //cerr << " (6) " << pos;
+                        for (int i = 0; i < Dimensions; ++i) {
+                            // store largest value (for this SplittingPlane)
+                            new_x[i] = (*this)[i][0];
+                            where(less) | (*this)[i] = (*this)[i].shifted(1);
+                            (*this)[i][pos] = x[i];
+                        }
+                        //cerr << ' ' << (*this)[SplittingPlane] << '\n';
+                        if (m_child[1]) {
+                            m_child[1]->insert(new_x);
+                        } else {
+                            m_child[1] = make_unique<Node<ChildSplittingPlane>>(new_x);
+                        }
+                    } else {
+                        //cerr << " (7) " << pos;
+                        for (int i = 0; i < Dimensions; ++i) {
+                            // store smallest value (for this SplittingPlane)
+                            new_x[i] = (*this)[i][V::Size - 1];
+                            where(!less) | (*this)[i] = (*this)[i].shifted(-1);
+                            (*this)[i][pos] = x[i];
+                        }
+                        //cerr << ' ' << (*this)[SplittingPlane] << '\n';
+                        if (m_child[0]) {
+                            m_child[0]->insert(new_x);
+                        } else {
+                            m_child[0] = make_unique<Node<ChildSplittingPlane>>(new_x);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Node::operator<< {{{2
+        friend std::ostream &operator<<(std::ostream &out, const Node &node)
+        {
+            out << SplittingPlane << ' ' << node;
+            if (node.m_child[0]) {
+                out << "\nl" << *node.m_child[0];
+            }
+            if (node.m_child[1]) {
+                out << "\nr" << *node.m_child[1];
+            }
+            return out << " up";
+        }
+
+        // Node::findNearest {{{2
+        T findNearest(const T &x) const
+        {
+            using namespace std;
+            const V xv(x);
+
+            // if we have a child on the "wrong" side it could still be/find the
+            // nearest neighbor, but only if the shortest distance of the search point
+            // x to the splitting plane is less than the distance to the current
+            // candidate. We only need to look at dx[0] and dx[V::Size - 1]
+            const auto dx = get_kdtree_1dim_distance<SplittingPlane>(xv, *this);
+
+            const auto less = get_kdtree_value<SplittingPlane>(*this) < get_kdtree_value<SplittingPlane>(xv);
+            const auto d = get_kdtree_distance(xv, *this);
+            const auto pos = (d.min() == d).firstOne();
+            T candidate = simdize_get(*this, pos);
+            auto bestDistance = d[pos];
+            if (all_of(less) && m_child[0]) {
+                const auto tmp = m_child[0]->findNearest(x);
+                const auto tmpDistance = get_kdtree_distance(x, tmp);
+                if (tmpDistance < bestDistance) {
+                    candidate = tmp;
+                    bestDistance = tmpDistance;
+                }
+            } else if (none_of(less) && m_child[1]) {
+                const auto tmp = m_child[1]->findNearest(x);
+                const auto tmpDistance = get_kdtree_distance(x, tmp);
+                if (tmpDistance < bestDistance) {
+                    candidate = tmp;
+                    bestDistance = tmpDistance;
+                }
+            }
+            if (!all_of(less) &&  // no need to go down the same path again
+                dx[V::Size - 1] < bestDistance && m_child[0]) {
+                const auto tmp = m_child[0]->findNearest(x);
+                const auto tmpDistance = get_kdtree_distance(x, tmp);
+                if (tmpDistance < bestDistance) {
+                    candidate = tmp;
+                    bestDistance = tmpDistance;
+                }
+            }
+            if (!none_of(less) &&  // no need to go down the same path again
+                dx[0] < bestDistance && m_child[1]) {
+                const auto tmp = m_child[1]->findNearest(x);
+                const auto tmpDistance = get_kdtree_distance(x, tmp);
+                if (tmpDistance < bestDistance) {
+                    candidate = tmp;
+                    // bestDistance = tmpDistance;
+                }
+            }
+
+            return candidate;
+        }
+    };
+
+    NodePtr<0> m_root; //{{{2
+
+public: //{{{2
+    KdTreeV() = default; //{{{2
+
+    // insert {{{2
+    template <typename U> void insert(U &&x)
+    {
+        if (m_root) {
+            m_root->insert(std::forward<U>(x));
+        } else {
+            m_root = make_unique<Node<0>>(std::forward<U>(x));
+        }
+    }
+
+    // findNearest {{{2
+    T findNearest(const T &x) const
+    {
+        if (!m_root) {
+            throw std::runtime_error(
+                "No values in the KdTree, which is required for findNearest.");
+        }
+        return m_root->findNearest(x);
+    }
+
+    // operator<< {{{2
+    friend std::ostream &operator<<(std::ostream &out, const KdTreeV &tree)
+    {
+        return out << *tree.m_root;
+    }
+    // }}}2
+};
 
 // class KdTree {{{1
 template <std::size_t Dimensions, typename T> class KdTree
@@ -243,13 +481,15 @@ int main() //{{{1
     std::uniform_real_distribution<float> uniform(-99, 99);
 
     KdTree<3, Point<float>> pointsTree;
+    KdTreeV<3, Point<float>> pointsTreeV;
     LinearNeighborSearch<Point<float>> pointsVector(SetSize);
     for (int i = 0; i < SetSize; ++i) {
         const Point<float> p{uniform(randomEngine), uniform(randomEngine), uniform(randomEngine)};
         pointsTree.insert(p);
+        pointsTreeV.insert(p);
         pointsVector.insert(p);
     }
-    //std::cout << pointsTree << '\n';
+    //std::cout << pointsTreeV << '\n';
 
     std::vector<Point<float>> searchPoints;
     searchPoints.reserve(NumberOfSearches);
@@ -271,22 +511,42 @@ int main() //{{{1
     tsc.start();
     for (int i = 0; i < NumberOfSearches; ++i) {
         const auto &p = searchPoints[i];
+        const auto &p2 = pointsTreeV.findNearest(p);
+        asm(""::"m"(p2));
+        //std::cout << "looking near " << p << ", found " << p2 << ", distance " << get_kdtree_distance(p, p2) << '\n';
+    }
+    tsc.stop();
+    const auto time_kdtreev = tsc.cycles();
+
+    tsc.start();
+    for (int i = 0; i < NumberOfSearches; ++i) {
+        const auto &p = searchPoints[i];
         const auto &p2 = pointsVector.findNearest(p);
         asm(""::"m"(p2));
+//#define COMPARE_KDTREE_LINEAR
 #ifdef COMPARE_KDTREE_LINEAR
         const auto &p3 = pointsTree.findNearest(p);
+        const auto &p4 = pointsTreeV.findNearest(p);
         if (get_kdtree_distance(p, p2) != get_kdtree_distance(p, p3)) {
-            std::cerr << p << " failed " << p2 << p3 << '\n';
+            std::cerr << p << " failed " << p2 << " (" << get_kdtree_distance(p, p2)
+                      << ") vs. KdTree " << p3 << " (" << get_kdtree_distance(p, p3) << ")\n";
+        }
+        if (get_kdtree_distance(p, p2) != get_kdtree_distance(p, p4)) {
+            std::cerr << p << " failed " << p2 << " (" << get_kdtree_distance(p, p2)
+                      << ") vs. KdTreeV " << p4 << " (" << get_kdtree_distance(p, p4) << ")\n";
         }
 #endif
     }
     tsc.stop();
     const auto time_linear = tsc.cycles();
 
-    std::cout << "kd-tree: " << std::setw(11) << time_kdtree
-              << "\n linear: " << std::setw(11) << time_linear
-              << "\n  ratio: " << std::setw(11)
-              << double(time_linear) / double(time_kdtree) << '\n';
+    std::cout << "   kd-tree: " << std::setw(11) << time_kdtree
+              << "\nVc kd-tree: " << std::setw(11) << time_kdtreev
+              << "\n    linear: " << std::setw(11) << time_linear
+              << "\n     ratio: " << std::setw(11)
+              << double(time_linear) / double(time_kdtree)
+              << "\n  Vc ratio: " << std::setw(11)
+              << double(time_kdtree) / double(time_kdtreev) << '\n';
 
     return 0;
 } //}}}1
