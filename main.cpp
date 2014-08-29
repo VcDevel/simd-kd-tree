@@ -32,16 +32,15 @@
 
 #include "../tsc.h"
 
+// make_unique {{{1
 template <typename T, typename... Args> std::unique_ptr<T> make_unique(Args &&... args)
 {
     return std::unique_ptr<T>{new T{std::forward<Args>(args)...}};
 }
 
-template<typename T>
-struct Point {
-    //Point() = default;
-    //Point(const Point &) = default;
-    //Point(Point &&) = default;
+// struct Point<T> {{{1
+template <typename T> class Point
+{
     std::array<T, 3> coordinate;
 
     friend std::ostream &operator<<(std::ostream &out, const Point &p)
@@ -59,11 +58,13 @@ struct Point {
     }
 };
 
+// get_kdtree_value {{{1
 template <std::size_t Plane, typename T> T get_kdtree_value(const Point<T> &p)
 {
     return p.coordinate[Plane];
 }
 
+// get_kdtree_1dim_distance {{{1
 template <std::size_t Plane, typename T>
 T get_kdtree_1dim_distance(const Point<T> &p0, const Point<T> &p1)
 {
@@ -71,6 +72,7 @@ T get_kdtree_1dim_distance(const Point<T> &p0, const Point<T> &p1)
     return dx * dx;
 }
 
+// class KdTree {{{1
 template <std::size_t Dimensions, typename T> class KdTree
 {
     template <std::size_t SplittingPlane> struct Node;
@@ -183,6 +185,7 @@ public:
     }
 };
 
+// class LinearNeighborSearch {{{1
 template <typename T> class LinearNeighborSearch
 {
 public:
@@ -221,7 +224,7 @@ private:
     std::vector<T> m_data;
 };
 
-int main()
+int main() //{{{1
 {
     constexpr int SetSize = 20000;
     constexpr int NumberOfSearches = 50000;
@@ -276,4 +279,6 @@ int main()
               << double(time_linear) / double(time_kdtree) << '\n';
 
     return 0;
-}
+} //}}}1
+
+// vim: foldmethod=marker
