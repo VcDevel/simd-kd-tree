@@ -477,21 +477,24 @@ int main() //{{{1
     constexpr int SetSize = 20000;
     constexpr int NumberOfSearches = 50000;
 
-    std::default_random_engine randomEngine(1);
-    std::uniform_real_distribution<float> uniform(-99, 99);
+    using T = float;
+    using Point = ::Point<T>;
 
-    KdTree<3, Point<float>> pointsTree;
-    KdTreeV<3, Point<float>> pointsTreeV;
-    LinearNeighborSearch<Point<float>> pointsVector(SetSize);
+    std::default_random_engine randomEngine(1);
+    std::uniform_real_distribution<T> uniform(-99, 99);
+
+    KdTree<3, Point> pointsTree;
+    KdTreeV<3, Point> pointsTreeV;
+    LinearNeighborSearch<Point> pointsVector(SetSize);
     for (int i = 0; i < SetSize; ++i) {
-        const Point<float> p{uniform(randomEngine), uniform(randomEngine), uniform(randomEngine)};
+        const Point p{uniform(randomEngine), uniform(randomEngine), uniform(randomEngine)};
         pointsTree.insert(p);
         pointsTreeV.insert(p);
         pointsVector.insert(p);
     }
     //std::cout << pointsTreeV << '\n';
 
-    std::vector<Point<float>> searchPoints;
+    std::vector<Point> searchPoints;
     searchPoints.reserve(NumberOfSearches);
     for (int i = 0; i < NumberOfSearches; ++i) {
         searchPoints.push_back({uniform(randomEngine), uniform(randomEngine), uniform(randomEngine)});
