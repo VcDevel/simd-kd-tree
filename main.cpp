@@ -38,10 +38,10 @@ template <typename T, typename... Args> std::unique_ptr<T> make_unique(Args &&..
     return std::unique_ptr<T>{new T{std::forward<Args>(args)...}};
 }
 
-// struct Point<T> {{{1
-template <typename T> class Point
+// struct Point<T, N> {{{1
+template <typename T, std::size_t N> class Point
 {
-    std::array<T, 3> coordinate;
+    std::array<T, N> coordinate;
 
 public:
     template <typename... Us> Point(Us &&... init) : coordinate{{std::forward<Us>(init)...}}
@@ -54,45 +54,60 @@ public:
     const T &operator[](std::size_t i) const noexcept { return coordinate[i]; }
 };
 
-template <typename T> std::ostream &operator<<(std::ostream &out, const Point<T> &p)
+template <typename T, std::size_t N> std::ostream &operator<<(std::ostream &out, const Point<T, N> &p)
 {
-    return out << '[' << p[0] << ' ' << p[1] << ' ' << p[2] << ']';
+    out << '[' << p[0];
+    Vc::Common::unrolled_loop<std::size_t, 1, N>([&](std::size_t i) {
+        out << ' ' << p[i];
+    });
+    return out << ']';
 }
 
 // tuple interface to Point<T> {{{1
 namespace std
 {
-template <typename T>
-struct tuple_size<Point<T>> : public std::integral_constant<std::size_t, 3>{};
-template <std::size_t I, typename T> struct tuple_element<I, Point<T>>
+template <typename T, std::size_t N>
+struct tuple_size<Point<T, N>> : public std::integral_constant<std::size_t, N>
+{
+};
+template <std::size_t I, typename T, std::size_t N> struct tuple_element<I, Point<T, N>>
 {
     typedef T type;
 };
 }  // namespace std
-template <std::size_t I, typename T> T &get(Point<T> &x) noexcept { return x[I]; }
-template <std::size_t I, typename T> const T &get(const Point<T> &x) noexcept
+template <std::size_t I, typename T, std::size_t N> T &get(Point<T, N> &x) noexcept
+{
+    return x[I];
+}
+template <std::size_t I, typename T, std::size_t N>
+const T &get(const Point<T, N> &x) noexcept
 {
     return x[I];
 }
 
 // get_kdtree_distance {{{1
-template <typename T> T get_kdtree_distance(const Point<T> &p0, const Point<T> &p1)
+template <typename T, std::size_t N>
+T get_kdtree_distance(const Point<T, N> &p0, const Point<T, N> &p1)
 {
     const auto dx = p0[0] - p1[0];
-    const auto dy = p0[1] - p1[1];
-    const auto dz = p0[2] - p1[2];
-    return dx * dx + dy * dy + dz * dz;
+    T r = dx * dx;
+    Vc::Common::unrolled_loop<std::size_t, 1, N>([&](std::size_t i) {
+        const auto d_ = p0[i] - p1[i];
+        r += d_ * d_;
+    });
+    return r;
 }
 
 // get_kdtree_value {{{1
-template <std::size_t Plane, typename T> T get_kdtree_value(const Point<T> &p)
+template <std::size_t Plane, typename T, std::size_t N>
+T get_kdtree_value(const Point<T, N> &p)
 {
     return p[Plane];
 }
 
 // get_kdtree_1dim_distance {{{1
-template <std::size_t Plane, typename T>
-T get_kdtree_1dim_distance(const Point<T> &p0, const Point<T> &p1)
+template <std::size_t Plane, typename T, std::size_t N>
+T get_kdtree_1dim_distance(const Point<T, N> &p0, const Point<T, N> &p1)
 {
     const auto dx = get_kdtree_value<Plane>(p0) - get_kdtree_value<Plane>(p1);
     return dx * dx;
@@ -478,7 +493,7 @@ int main() //{{{1
     constexpr int NumberOfSearches = 50000;
 
     using T = float;
-    using Point = ::Point<T>;
+    using Point = ::Point<T, 3>;
 
     std::default_random_engine randomEngine(1);
     std::uniform_real_distribution<T> uniform(-99, 99);
