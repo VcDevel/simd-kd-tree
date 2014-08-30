@@ -528,12 +528,13 @@ int main() //{{{1
     }
     tsc.stop();
     const auto linear_inserts = tsc.cycles();
-    std::cout << "-- inserts --"
-              << "\n   kd-tree: " << std::setw(11) << kdtree_inserts
-              << "\nVc kd-tree: " << std::setw(11) << kdtreev_inserts
-              << "\n    linear: " << std::setw(11) << linear_inserts
-              << "\n  Vc ratio: " << std::setw(11)
-              << double(kdtree_inserts) / double(kdtreev_inserts) << '\n';
+    std::cout << "             KdTree    KdTreeV  LinearNeighborSearch  KdTree/KdTreeV  "
+                 "Linear/KdTree\n";
+    std::cout << "inserts "
+              << std::setw(11) << kdtree_inserts
+              << std::setw(11) << kdtreev_inserts
+              << std::setw(22) << linear_inserts
+              << std::setw(16) << double(kdtree_inserts) / double(kdtreev_inserts) << '\n';
 
     //std::cout << pointsTreeV << '\n';
 
@@ -585,14 +586,10 @@ int main() //{{{1
     tsc.stop();
     const auto time_linear = tsc.cycles();
 
-    std::cout << "-- searches --"
-              << "\n   kd-tree: " << std::setw(11) << time_kdtree
-              << "\nVc kd-tree: " << std::setw(11) << time_kdtreev
-              << "\n    linear: " << std::setw(11) << time_linear
-              << "\n     ratio: " << std::setw(11)
-              << double(time_linear) / double(time_kdtree)
-              << "\n  Vc ratio: " << std::setw(11)
-              << double(time_kdtree) / double(time_kdtreev) << '\n';
+    std::cout << "searches" << std::setw(11) << time_kdtree << std::setw(11)
+              << time_kdtreev << std::setw(22) << time_linear << std::setw(16)
+              << double(time_kdtree) / double(time_kdtreev) << std::setw(15)
+              << double(time_linear) / double(time_kdtree) << '\n';
 
     return 0;
 } //}}}1
