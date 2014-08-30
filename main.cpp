@@ -134,7 +134,7 @@ template <typename T, std::size_t Dimensions = std::tuple_size<T>::value> class 
 
         // Node data members {{{2
         std::array<ChildPtr, 2> m_child;
-        int m_entries;
+        unsigned int m_entries;
 
         // Node(T) {{{2
         /// create a new leaf node with payload \p x
@@ -156,13 +156,13 @@ template <typename T, std::size_t Dimensions = std::tuple_size<T>::value> class 
                 if (any_of(less)) {
                     if (all_of(less)) {
                         //cerr << " (1)";
-                        for (int i = 0; i < Dimensions; ++i) {
+                        for (std::size_t i = 0; i < Dimensions; ++i) {
                             (*this)[i][m_entries] = x[i];
                         }
                     } else {
                         int pos = (!less).firstOne();
                         //cerr << " (2) " << pos;
-                        for (int i = 0; i < Dimensions; ++i) {
+                        for (std::size_t i = 0; i < Dimensions; ++i) {
                             where(OneDimV::IndexesFromZero() > pos) | (*this)[i] =
                                 (*this)[i].shifted(-1);
                             (*this)[i][pos] = x[i];
@@ -170,7 +170,7 @@ template <typename T, std::size_t Dimensions = std::tuple_size<T>::value> class 
                     }
                 } else {
                     //cerr << " (3)";
-                    for (int i = 0; i < Dimensions; ++i) {
+                    for (std::size_t i = 0; i < Dimensions; ++i) {
                         (*this)[i] = (*this)[i].shifted(-1);
                         (*this)[i][0] = x[i];
                     }
@@ -198,12 +198,12 @@ template <typename T, std::size_t Dimensions = std::tuple_size<T>::value> class 
                     // The new value must go into this node. The value it pushes out of (*this) could
                     // go to either the left or the right child - depending on what side we want to
                     // push out. Determine the bias from the position.
-                    int pos = (!less).firstOne();
+                    std::size_t pos = (!less).firstOne();
                     T new_x;
                     if (pos <= V::Size / 2) {
                         pos -= 1;
                         //cerr << " (6) " << pos;
-                        for (int i = 0; i < Dimensions; ++i) {
+                        for (std::size_t i = 0; i < Dimensions; ++i) {
                             // store largest value (for this SplittingPlane)
                             new_x[i] = (*this)[i][0];
                             where(less) | (*this)[i] = (*this)[i].shifted(1);
@@ -217,7 +217,7 @@ template <typename T, std::size_t Dimensions = std::tuple_size<T>::value> class 
                         }
                     } else {
                         //cerr << " (7) " << pos;
-                        for (int i = 0; i < Dimensions; ++i) {
+                        for (std::size_t i = 0; i < Dimensions; ++i) {
                             // store smallest value (for this SplittingPlane)
                             new_x[i] = (*this)[i][V::Size - 1];
                             where(!less) | (*this)[i] = (*this)[i].shifted(-1);
