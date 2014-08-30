@@ -222,7 +222,7 @@ template <typename T, std::size_t Dimensions = std::tuple_size<T>::value> class 
         // Node::operator<< {{{2
         friend std::ostream &operator<<(std::ostream &out, const Node &node)
         {
-            out << SplittingPlane << ' ' << node;
+            out << SplittingPlane << ' ' << static_cast<const V &>(node);
             if (node.m_child[0]) {
                 out << "\nl" << *node.m_child[0];
             }
