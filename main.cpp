@@ -498,24 +498,51 @@ int main() //{{{1
     std::default_random_engine randomEngine(1);
     std::uniform_real_distribution<T> uniform(-99, 99);
 
-    KdTree<Point> pointsTree;
-    KdTreeV<Point> pointsTreeV;
-    LinearNeighborSearch<Point> pointsVector(SetSize);
+    std::vector<Point> randomPoints;
     for (int i = 0; i < SetSize; ++i) {
-        const Point p{uniform(randomEngine), uniform(randomEngine), uniform(randomEngine)};
+        randomPoints.emplace_back(uniform(randomEngine), uniform(randomEngine), uniform(randomEngine));
+    }
+
+    TimeStampCounter tsc;
+
+    tsc.start();
+    KdTree<Point> pointsTree;
+    for (const Point &p : randomPoints) {
         pointsTree.insert(p);
+    }
+    tsc.stop();
+    const auto kdtree_inserts = tsc.cycles();
+
+    tsc.start();
+    KdTreeV<Point> pointsTreeV;
+    for (const Point &p : randomPoints) {
         pointsTreeV.insert(p);
+    }
+    tsc.stop();
+    const auto kdtreev_inserts = tsc.cycles();
+
+    tsc.start();
+    LinearNeighborSearch<Point> pointsVector(SetSize);
+    for (const Point &p : randomPoints) {
         pointsVector.insert(p);
     }
+    tsc.stop();
+    const auto linear_inserts = tsc.cycles();
+    std::cout << "-- inserts --"
+              << "\n   kd-tree: " << std::setw(11) << kdtree_inserts
+              << "\nVc kd-tree: " << std::setw(11) << kdtreev_inserts
+              << "\n    linear: " << std::setw(11) << linear_inserts
+              << "\n  Vc ratio: " << std::setw(11)
+              << double(kdtree_inserts) / double(kdtreev_inserts) << '\n';
+
     //std::cout << pointsTreeV << '\n';
 
     std::vector<Point> searchPoints;
     searchPoints.reserve(NumberOfSearches);
     for (int i = 0; i < NumberOfSearches; ++i) {
-        searchPoints.push_back({uniform(randomEngine), uniform(randomEngine), uniform(randomEngine)});
+        searchPoints.emplace_back(uniform(randomEngine), uniform(randomEngine), uniform(randomEngine));
     }
 
-    TimeStampCounter tsc;
     tsc.start();
     for (int i = 0; i < NumberOfSearches; ++i) {
         const auto &p = searchPoints[i];
@@ -558,7 +585,8 @@ int main() //{{{1
     tsc.stop();
     const auto time_linear = tsc.cycles();
 
-    std::cout << "   kd-tree: " << std::setw(11) << time_kdtree
+    std::cout << "-- searches --"
+              << "\n   kd-tree: " << std::setw(11) << time_kdtree
               << "\nVc kd-tree: " << std::setw(11) << time_kdtreev
               << "\n    linear: " << std::setw(11) << time_linear
               << "\n     ratio: " << std::setw(11)
