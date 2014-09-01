@@ -142,6 +142,7 @@ template <typename T, std::size_t Dimensions = std::tuple_size<T>::value> class 
 {
     using V = simdize<T>;
     using OneDimV = typename V::FirstVectorType;
+    using DistanceType = decltype(get_kdtree_distance(std::declval<T>(), std::declval<T>()));
 
     template <std::size_t SplittingPlane> struct Node;
     template <std::size_t SplittingPlane>
@@ -239,29 +240,27 @@ template <typename T, std::size_t Dimensions = std::tuple_size<T>::value> class 
         }
 
         // Node::findNearest {{{2
-        T findNearest(const T x) const
+        std::pair<T, DistanceType> findNearest(const V &x) const
         {
             using namespace std;
-            const V xv(x);
 
             // if we have a child on the "wrong" side it could still contain the
             // nearest neighbor, but only if the shortest distance of the search point
             // x to the splitting plane is less than the distance to the current
             // candidate. We only need to look at dx[0] and dx[V::Size - 1]
-            const auto dx = get_kdtree_1dim_distance<SplittingPlane>(xv, *this);
+            const auto dx = get_kdtree_1dim_distance<SplittingPlane>(x, *this);
 
-            const auto less = get_kdtree_value<SplittingPlane>(*this) < get_kdtree_value<SplittingPlane>(xv);
-            const auto distance = get_kdtree_distance(xv, *this);
+            const auto less = get_kdtree_value<SplittingPlane>(*this) < get_kdtree_value<SplittingPlane>(x);
+            const auto distance = get_kdtree_distance(x, *this);
             const auto pos = (distance.min() == distance).firstOne();
             T candidate = simdize_get(*this, pos);
             auto bestDistance = distance[pos];
             auto recurseChild = [&](const ChildPtr &child) {
                 if (child) {
                     const auto candidateFromChild = child->findNearest(x);
-                    const auto childDistance = get_kdtree_distance(x, candidateFromChild);
-                    if (childDistance < bestDistance) {
-                        candidate = candidateFromChild;
-                        bestDistance = childDistance;
+                    if (candidateFromChild.second < bestDistance) {
+                        candidate = candidateFromChild.first;
+                        bestDistance = candidateFromChild.second;
                     }
                 }
             };
@@ -285,7 +284,7 @@ template <typename T, std::size_t Dimensions = std::tuple_size<T>::value> class 
                 }
             }
 
-            return candidate;
+            return std::make_pair(candidate, bestDistance);
         }
     };
 
@@ -311,7 +310,7 @@ public: //{{{2
             throw std::runtime_error(
                 "No values in the KdTree, which is required for findNearest.");
         }
-        return m_root->findNearest(x);
+        return m_root->findNearest(V(x)).first;
     }
 
     // operator<< {{{2
