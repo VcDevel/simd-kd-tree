@@ -100,7 +100,23 @@ T get_kdtree_distance(const Point<T, N> &p0, const Point<T, N> &p1)
 
 // get_kdtree_value {{{1
 template <std::size_t Plane, typename T, std::size_t N>
-T get_kdtree_value(const Point<T, N> &p)
+const T &get_kdtree_value(const Point<T, N> &p) noexcept
+{
+    return p[Plane];
+}
+template <std::size_t Plane, typename T, std::size_t N>
+T &get_kdtree_value(Point<T, N> &p) noexcept
+{
+    return p[Plane];
+}
+
+template <typename T, std::size_t N>
+const T &get_kdtree_value(const Point<T, N> &p, std::size_t Plane) noexcept
+{
+    return p[Plane];
+}
+template <typename T, std::size_t N>
+T &get_kdtree_value(Point<T, N> &p, std::size_t Plane) noexcept
 {
     return p[Plane];
 }
@@ -143,93 +159,60 @@ template <typename T, std::size_t Dimensions = std::tuple_size<T>::value> class 
             , m_entries(1)  // but mark that only the first entry is valid
         {}
 
+        // Node::childInsert {{{2
+        void childInsert(ChildPtr &child, const T new_x)
+        {
+            if (child) {
+                child->insert(new_x);
+            } else {
+                // the Node constructor could be optimized to not have to redo the
+                // V(x) broadcast
+                child = make_unique<Node<ChildSplittingPlane>>(new_x);
+            }
+        };
+
         // Node::insert {{{2
         /// check whether \p x needs to go left or right and hand it off or create a new
         /// leaf node
-        void insert(const T &x)
+        void insert(const T x)
         {
             using namespace std;
-            const auto less = get_kdtree_value<SplittingPlane>(*this) <
-                              get_kdtree_value<SplittingPlane>(V(x));
-            //cerr << SplittingPlane << '|' << setw(10) << x[SplittingPlane] << ' ' << less << ' ' << *this[SplittingPlane];
+            //cerr << SplittingPlane << '|' << setw(10) << get_kdtree_value<SplittingPlane>(x)
             if (m_entries < V::Size) {
-                if (any_of(less)) {
-                    if (all_of(less)) {
-                        //cerr << " (1)";
-                        for (std::size_t i = 0; i < Dimensions; ++i) {
-                            (*this)[i][m_entries] = x[i];
-                        }
-                    } else {
-                        int pos = (!less).firstOne();
-                        //cerr << " (2) " << pos;
-                        for (std::size_t i = 0; i < Dimensions; ++i) {
-                            where(OneDimV::IndexesFromZero() > pos) | (*this)[i] =
-                                (*this)[i].shifted(-1);
-                            (*this)[i][pos] = x[i];
-                        }
-                    }
-                } else {
-                    //cerr << " (3)";
-                    for (std::size_t i = 0; i < Dimensions; ++i) {
-                        (*this)[i] = (*this)[i].shifted(-1);
-                        (*this)[i][0] = x[i];
-                    }
-                }
+                //cerr << " (1)";
+                simdize_assign(*this, m_entries, x);
                 ++m_entries;
-                //cerr << ' ' << (*this)[SplittingPlane] << ' ' << m_entries << '\n';
+                //cerr << ' ' << get_kdtree_value<SplittingPlane>(*this) << ' ' << m_entries << '\n';
             } else {
-                if (all_of(less)) {
-                    //cerr << " (4)\n";
-                    // needs to go to the left child node
-                    if (m_child[0]) {
-                        m_child[0]->insert(x);
-                    } else {
-                        m_child[0] = make_unique<Node<ChildSplittingPlane>>(x);
-                    }
-                } else if (none_of(less)) {
-                    //cerr << " (5)\n";
-                    // needs to go to the right child node
-                    if (m_child[1]) {
-                        m_child[1]->insert(x);
-                    } else {
-                        m_child[1] = make_unique<Node<ChildSplittingPlane>>(x);
-                    }
+                const auto less = get_kdtree_value<SplittingPlane>(*this) <
+                                  get_kdtree_value<SplittingPlane>(V(x));
+                //cerr << ' ' << less << ' ' << get_kdtree_value<SplittingPlane>(*this);
+                if (all_of(less)) {  // needs to go to the left child node
+                    //cerr << " (2)\n";
+                    childInsert(m_child[0], x);
+                } else if (none_of(less)) {  // needs to go to the right child node
+                    //cerr << " (3)\n";
+                    childInsert(m_child[1], x);
                 } else {
                     // The new value must go into this node. The value it pushes out of (*this) could
-                    // go to either the left or the right child - depending on what side we want to
-                    // push out. Determine the bias from the position.
-                    std::size_t pos = (!less).firstOne();
-                    T new_x;
-                    if (pos <= V::Size / 2) {
-                        pos -= 1;
-                        //cerr << " (6) " << pos;
-                        for (std::size_t i = 0; i < Dimensions; ++i) {
-                            // store largest value (for this SplittingPlane)
-                            new_x[i] = (*this)[i][0];
-                            where(less) | (*this)[i] = (*this)[i].shifted(1);
-                            (*this)[i][pos] = x[i];
-                        }
-                        //cerr << ' ' << (*this)[SplittingPlane] << '\n';
-                        if (m_child[1]) {
-                            m_child[1]->insert(new_x);
-                        } else {
-                            m_child[1] = make_unique<Node<ChildSplittingPlane>>(new_x);
-                        }
-                    } else {
-                        //cerr << " (7) " << pos;
-                        for (std::size_t i = 0; i < Dimensions; ++i) {
-                            // store smallest value (for this SplittingPlane)
-                            new_x[i] = (*this)[i][V::Size - 1];
-                            where(!less) | (*this)[i] = (*this)[i].shifted(-1);
-                            (*this)[i][pos] = x[i];
-                        }
-                        //cerr << ' ' << (*this)[SplittingPlane] << '\n';
-                        if (m_child[0]) {
-                            m_child[0]->insert(new_x);
-                        } else {
-                            m_child[0] = make_unique<Node<ChildSplittingPlane>>(new_x);
-                        }
-                    }
+                    // go to either the left or the right child - depending on which value we want to
+                    // push out. Determine the bias from the number of values that are "less".
+                    // If most values are "less" then the value to insert is larger than the median
+                    // and thus we push out the max value. Otherwise push out the min value.
+                    const bool majorityIsLess = less.count() >= int(V::Size / 2);
+                    const auto &data = get_kdtree_value<SplittingPlane>(*this);
+                    const auto replaceValue = majorityIsLess ? data.max() : data.min();
+                    // replaceValue is constructed such that:
+                    // all_of(get_kdtree_value<SplittingPlane>(*this) < get_kdtree_value<SplittingPlane>(V(new_x)))
+                    // if the majority of values in this node are less than x (for the current
+                    // SplittingPlane)
+                    const std::size_t pos = (replaceValue == data).firstOne();
+                    //cerr << " (4) " << pos << ' ' << replaceValue;
+                    // swap largest/smallest value (of this SplittingPlane):
+                    const T new_x = simdize_get(*this, pos);
+                    simdize_assign(*this, pos, x);
+                    //cerr << ' ' << get_kdtree_value<SplittingPlane>(*this) << '\n';
+                    childInsert(m_child[majorityIsLess ? 0 : 1], new_x);
                 }
             }
         }
@@ -253,48 +236,44 @@ template <typename T, std::size_t Dimensions = std::tuple_size<T>::value> class 
             using namespace std;
             const V xv(x);
 
-            // if we have a child on the "wrong" side it could still be/find the
+            // if we have a child on the "wrong" side it could still contain the
             // nearest neighbor, but only if the shortest distance of the search point
             // x to the splitting plane is less than the distance to the current
             // candidate. We only need to look at dx[0] and dx[V::Size - 1]
             const auto dx = get_kdtree_1dim_distance<SplittingPlane>(xv, *this);
 
             const auto less = get_kdtree_value<SplittingPlane>(*this) < get_kdtree_value<SplittingPlane>(xv);
-            const auto d = get_kdtree_distance(xv, *this);
-            const auto pos = (d.min() == d).firstOne();
+            const auto distance = get_kdtree_distance(xv, *this);
+            const auto pos = (distance.min() == distance).firstOne();
             T candidate = simdize_get(*this, pos);
-            auto bestDistance = d[pos];
-            if (all_of(less) && m_child[0]) {
-                const auto tmp = m_child[0]->findNearest(x);
-                const auto tmpDistance = get_kdtree_distance(x, tmp);
-                if (tmpDistance < bestDistance) {
-                    candidate = tmp;
-                    bestDistance = tmpDistance;
+            auto bestDistance = distance[pos];
+            auto recurseChild = [&](const ChildPtr &child) {
+                if (child) {
+                    const auto candidateFromChild = child->findNearest(x);
+                    const auto childDistance = get_kdtree_distance(x, candidateFromChild);
+                    if (childDistance < bestDistance) {
+                        candidate = candidateFromChild;
+                        bestDistance = childDistance;
+                    }
                 }
-            } else if (none_of(less) && m_child[1]) {
-                const auto tmp = m_child[1]->findNearest(x);
-                const auto tmpDistance = get_kdtree_distance(x, tmp);
-                if (tmpDistance < bestDistance) {
-                    candidate = tmp;
-                    bestDistance = tmpDistance;
+            };
+            if (all_of(less)) {
+                recurseChild(m_child[0]);
+                if (dx.max() <= bestDistance) {
+                    recurseChild(m_child[1]);
                 }
-            }
-            if (!all_of(less) &&  // no need to go down the same path again
-                dx[V::Size - 1] < bestDistance && m_child[0]) {
-                const auto tmp = m_child[0]->findNearest(x);
-                const auto tmpDistance = get_kdtree_distance(x, tmp);
-                if (tmpDistance < bestDistance) {
-                    candidate = tmp;
-                    bestDistance = tmpDistance;
+            } else if (none_of(less)) {
+                recurseChild(m_child[1]);
+                if (dx.min() <= bestDistance) {
+                    recurseChild(m_child[0]);
                 }
-            }
-            if (!none_of(less) &&  // no need to go down the same path again
-                dx[0] < bestDistance && m_child[1]) {
-                const auto tmp = m_child[1]->findNearest(x);
-                const auto tmpDistance = get_kdtree_distance(x, tmp);
-                if (tmpDistance < bestDistance) {
-                    candidate = tmp;
-                    // bestDistance = tmpDistance;
+            } else {
+                const auto bestDx = dx[pos];
+                if (bestDx <= bestDistance) {
+                    recurseChild(m_child[0]);
+                }
+                if (bestDx <= bestDistance) {
+                    recurseChild(m_child[1]);
                 }
             }
 
@@ -489,14 +468,18 @@ private:
 
 int main() //{{{1
 {
-    constexpr int SetSize = 20000;
+    constexpr int SetSize = 20000;  // required memory ~ SetSize * sizeof(Node)
+                                     // ~ SetSize * (sizeof(Point<T>) + 16)
+                                     // = SetSize * 32
     constexpr int NumberOfSearches = 50000;
 
     using T = float;
     using Point = ::Point<T, 3>;
 
     std::default_random_engine randomEngine(1);
-    std::uniform_real_distribution<T> uniform(-99, 99);
+    typename std::conditional<std::is_floating_point<T>::value,
+                              std::uniform_real_distribution<T>,
+                              std::uniform_int_distribution<T>>::type uniform(-99, 99);
 
     std::vector<Point> randomPoints;
     for (int i = 0; i < SetSize; ++i) {
@@ -528,15 +511,15 @@ int main() //{{{1
     }
     tsc.stop();
     const auto linear_inserts = tsc.cycles();
+    //std::cout << pointsTreeV << '\n';
+
     std::cout << "             KdTree    KdTreeV  LinearNeighborSearch  KdTree/KdTreeV  "
                  "Linear/KdTree\n";
     std::cout << "inserts "
               << std::setw(11) << kdtree_inserts
               << std::setw(11) << kdtreev_inserts
               << std::setw(22) << linear_inserts
-              << std::setw(16) << double(kdtree_inserts) / double(kdtreev_inserts) << '\n';
-
-    //std::cout << pointsTreeV << '\n';
+              << std::setw(16) << double(kdtree_inserts) / double(kdtreev_inserts) << std::endl;
 
     std::vector<Point> searchPoints;
     searchPoints.reserve(NumberOfSearches);
