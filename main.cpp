@@ -162,7 +162,7 @@ template <typename T, std::size_t Dimensions = std::tuple_size<T>::value> class 
 
         // Node(T) {{{2
         /// create a new leaf node with payload \p x
-        Node(const T &x)
+        Node(T x)
             : V(x)     // broadcast to all entries
             , m_entries(1)  // but mark that only the first entry is valid
         {}
@@ -239,7 +239,7 @@ template <typename T, std::size_t Dimensions = std::tuple_size<T>::value> class 
         }
 
         // Node::findNearest {{{2
-        T findNearest(const T &x) const
+        T findNearest(const T x) const
         {
             using namespace std;
             const V xv(x);
@@ -305,7 +305,7 @@ public: //{{{2
     }
 
     // findNearest {{{2
-    T findNearest(const T &x) const
+    T findNearest(T x) const
     {
         if (!m_root) {
             throw std::runtime_error(
@@ -378,7 +378,7 @@ template <typename T, std::size_t Dimensions = std::tuple_size<T>::value> class 
                        : candidate1;
         }
 
-        const T &findNearest(const T &x) const
+        const T &findNearest(const T x) const
         {
             const std::size_t index = (get_kdtree_value<SplittingPlane>(x) <
                                        get_kdtree_value<SplittingPlane>(m_data))
@@ -420,7 +420,7 @@ public:
         }
     }
 
-    const T &findNearest(const T &x) const
+    const T &findNearest(const T x) const
     {
         if (!m_root) {
             throw std::runtime_error(
