@@ -44,11 +44,19 @@ template <typename T, std::size_t N> class Point
     std::array<T, N> coordinate;
 
 public:
-    template <typename... Us> Point(Us &&... init) : coordinate{{std::forward<Us>(init)...}}
+    template <typename U0, typename... Us,
+              typename =
+                  typename std::enable_if<(!std::is_convertible<U0, Point>::value)>::type>
+    Point(U0 &&init0, Us &&... init)
+        : coordinate{{std::forward<U0>(init0), std::forward<Us>(init)...}}
     {
     }
 
     Point() = default;
+    Point(const Point &) = default;
+    Point(Point &&) = default;
+    Point &operator=(const Point &) = default;
+    Point &operator=(Point &&) = default;
 
     T &operator[](std::size_t i) noexcept { return coordinate[i]; }
     const T &operator[](std::size_t i) const noexcept { return coordinate[i]; }
