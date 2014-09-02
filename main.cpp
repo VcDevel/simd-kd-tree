@@ -32,6 +32,7 @@
 #include "../tsc.h"
 #include "simdize.h"
 #include "point.h"
+#include "linearsearch.h"
 
 // make_unique {{{1
 template <typename T, typename... Args> std::unique_ptr<T> make_unique(Args &&... args)
@@ -378,45 +379,6 @@ public:
     {
         return out << *tree.m_root;
     }
-};
-
-// class LinearNeighborSearch {{{1
-template <typename T> class LinearNeighborSearch
-{
-public:
-    LinearNeighborSearch() = default;
-    LinearNeighborSearch(std::size_t reserve) { m_data.reserve(reserve); }
-
-    template <typename U> void insert(U &&x) { m_data.push_back(std::forward<U>(x)); }
-    T findNearest(const T &x) const
-    {
-        /*
-        auto bestDistance = get_kdtree_distance(m_data[0], x);
-        std::size_t best = 0;
-        for (std::size_t i = 1; i < m_data.size(); ++i) {
-            const auto d = get_kdtree_distance(m_data[i], x);
-            if (d < bestDistance) {
-                bestDistance = d;
-                best = i;
-            }
-        }
-        return m_data[best];
-        */
-        using TT = decltype(get_kdtree_distance(x, x));
-        TT bestDistance = std::numeric_limits<TT>::max();
-        T p2;
-        for (const auto &p : m_data) {
-            const auto d = get_kdtree_distance(p, x);
-            if (d < bestDistance) {
-                bestDistance = d;
-                p2 = p;
-            }
-        }
-        return p2;
-    }
-
-private:
-    std::vector<T> m_data;
 };
 
 int main() //{{{1
