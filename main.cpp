@@ -31,66 +31,12 @@
 
 #include "../tsc.h"
 #include "simdize.h"
+#include "point.h"
 
 // make_unique {{{1
 template <typename T, typename... Args> std::unique_ptr<T> make_unique(Args &&... args)
 {
     return std::unique_ptr<T>{new T{std::forward<Args>(args)...}};
-}
-
-// struct Point<T, N> {{{1
-template <typename T, std::size_t N> class Point
-{
-    std::array<T, N> coordinate;
-
-public:
-    template <typename U0, typename... Us,
-              typename =
-                  typename std::enable_if<(!std::is_convertible<U0, Point>::value)>::type>
-    Point(U0 &&init0, Us &&... init)
-        : coordinate{{std::forward<U0>(init0), std::forward<Us>(init)...}}
-    {
-    }
-
-    Point() = default;
-    Point(const Point &) = default;
-    Point(Point &&) = default;
-    Point &operator=(const Point &) = default;
-    Point &operator=(Point &&) = default;
-
-    T &operator[](std::size_t i) noexcept { return coordinate[i]; }
-    const T &operator[](std::size_t i) const noexcept { return coordinate[i]; }
-};
-
-template <typename T, std::size_t N> std::ostream &operator<<(std::ostream &out, const Point<T, N> &p)
-{
-    out << '[' << p[0];
-    Vc::Common::unrolled_loop<std::size_t, 1, N>([&](std::size_t i) {
-        out << ' ' << p[i];
-    });
-    return out << ']';
-}
-
-// tuple interface to Point<T> {{{1
-namespace std
-{
-template <typename T, std::size_t N>
-struct tuple_size<Point<T, N>> : public std::integral_constant<std::size_t, N>
-{
-};
-template <std::size_t I, typename T, std::size_t N> struct tuple_element<I, Point<T, N>>
-{
-    typedef T type;
-};
-}  // namespace std
-template <std::size_t I, typename T, std::size_t N> T &get(Point<T, N> &x) noexcept
-{
-    return x[I];
-}
-template <std::size_t I, typename T, std::size_t N>
-const T &get(const Point<T, N> &x) noexcept
-{
-    return x[I];
 }
 
 // get_kdtree_distance {{{1
