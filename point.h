@@ -26,6 +26,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 }}}*/
 
+#ifndef POINT_H_
+#define POINT_H_
+
 #include <array>
 #include <type_traits>
 #include <iostream>
@@ -86,3 +89,51 @@ const T &get(const Point<T, N> &x) noexcept
     return x[I];
 }
 
+// get_kdtree_distance {{{1
+template <typename T, std::size_t N>
+T get_kdtree_distance(const Point<T, N> &p0, const Point<T, N> &p1)
+{
+    const auto dx = p0[0] - p1[0];
+    T r = dx * dx;
+    Vc::Common::unrolled_loop<std::size_t, 1, N>([&](std::size_t i) {
+        const auto d_ = p0[i] - p1[i];
+        r += d_ * d_;
+    });
+    return r;
+}
+
+// get_kdtree_value {{{1
+template <std::size_t Plane, typename T, std::size_t N>
+const T &get_kdtree_value(const Point<T, N> &p) noexcept
+{
+    return p[Plane];
+}
+template <std::size_t Plane, typename T, std::size_t N>
+T &get_kdtree_value(Point<T, N> &p) noexcept
+{
+    return p[Plane];
+}
+
+template <typename T, std::size_t N>
+const T &get_kdtree_value(const Point<T, N> &p, std::size_t Plane) noexcept
+{
+    return p[Plane];
+}
+template <typename T, std::size_t N>
+T &get_kdtree_value(Point<T, N> &p, std::size_t Plane) noexcept
+{
+    return p[Plane];
+}
+
+// get_kdtree_1dim_distance {{{1
+template <std::size_t Plane, typename T, std::size_t N>
+T get_kdtree_1dim_distance(const Point<T, N> &p0, const Point<T, N> &p1)
+{
+    const auto dx = get_kdtree_value<Plane>(p0) - get_kdtree_value<Plane>(p1);
+    return dx * dx;
+}
+//}}}1
+
+#endif  // POINT_H_
+
+// vim: foldmethod=marker
