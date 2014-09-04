@@ -27,6 +27,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 }}}*/
 
 #include <vector>
+#include "simdize.h"
 
 // class LinearNeighborSearch {{{1
 template <typename T> class LinearNeighborSearch
@@ -69,6 +70,50 @@ public:
 
 private:  // {{{2
     std::vector<T> m_data;
+    // }}}2
+};
+
+// class LinearNeighborSearchV {{{1
+template <typename T> class LinearNeighborSearchV
+{
+    using V = simdize<T>;
+
+public:
+    // insert {{{2
+    LinearNeighborSearchV() = default;
+    LinearNeighborSearchV(std::size_t reserve) { m_data.reserve(reserve); }
+
+    // insert {{{2
+    void insert(const T &x) {
+        if (m_lastFill == 0) {
+            m_data.push_back(V(x));
+        } else {
+            V &last = m_data.back();
+            simdize_assign(last, m_lastFill, x);
+        }
+        ++m_lastFill;
+        m_lastFill %= V::Size;
+    }
+
+    // findNearest {{{2
+    T findNearest(const T &x_) const
+    {
+        const V x(x_);
+        auto it = m_data.begin();
+        const auto end = m_data.end();
+        V p2 = *it;
+        auto bestDistance = get_kdtree_distance(x, *it);
+        for (++it; it != end; ++it) {
+            const auto tmp = get_kdtree_distance(x, *it);
+            where(tmp < bestDistance) | p2 = *it;
+            bestDistance = min(tmp, bestDistance);
+        }
+        return simdize_get(p2, (bestDistance.min() == bestDistance).firstOne());
+    }
+
+private:  // {{{2
+    std::vector<simdize<T>> m_data;
+    int m_lastFill = 0;
     // }}}2
 };
 
