@@ -244,6 +244,8 @@ public: //{{{2
 // class KdTree {{{1
 template <typename T, std::size_t Dimensions = std::tuple_size<T>::value> class KdTree
 {
+    using DistanceType = decltype(get_kdtree_distance(std::declval<T>(), std::declval<T>()));
+
     template <std::size_t SplittingPlane> struct Node;
     template <std::size_t SplittingPlane>
     using NodePtr = std::unique_ptr<Node<SplittingPlane>>;
@@ -297,31 +299,46 @@ template <typename T, std::size_t Dimensions = std::tuple_size<T>::value> class 
                        : candidate1;
         }
 
-        const T &findNearest(const T x) const
+        std::pair<T, DistanceType> findNearest(const T x) const
         {
+            const auto dx = get_kdtree_1dim_distance<SplittingPlane>(x, m_data);
+
             const std::size_t index = (get_kdtree_value<SplittingPlane>(x) <
                                        get_kdtree_value<SplittingPlane>(m_data))
                                           ? 0
                                           : 1;
-            const T *candidate = &m_data;  // first candidate to return is our point
             if (m_child[index]) {
                 // if we have a child node on the side where the search point would get
-                // stored, that node is an obvious candidate. Compare whether the existing
-                // candidate is still better, though.
-                candidate = &selectCloser(x, m_child[index]->findNearest(x), *candidate);
+                // stored, that node is an obvious candidate
+                auto candidate = m_child[index]->findNearest(x);
+                if (dx < candidate.second) {
+                    // if the resulting distance yields a sphere that intersects the current
+                    // splitting plane, then we have to look further
+                    const auto distance = get_kdtree_distance(x, m_data);
+                    if (distance < candidate.second) {
+                        candidate = std::make_pair(m_data, distance);
+                    }
+                    if (dx < candidate.second && m_child[index ^ 1]) {
+                        const auto candidate2 = m_child[index ^ 1]->findNearest(x);
+                        if (candidate2.second < candidate.second) {
+                            return candidate2;
+                        }
+                    }
+                }
+                return candidate;
             }
-            if (m_child[index ^ 1]) {
+            auto candidate = std::make_pair(m_data, get_kdtree_distance(x, m_data));
+            if (m_child[index ^ 1] && dx < candidate.second) {
                 // if we have a child on the "wrong" side it could still be/find the
                 // nearest neighbor, but only if the shortest distance of the search point
                 // x to the splitting plane is less than the distance to the current
                 // candidate.
-                const auto dx = get_kdtree_1dim_distance<SplittingPlane>(x, m_data);
-                if (dx < get_kdtree_distance(x, *candidate)) {
-                    candidate =
-                        &selectCloser(x, m_child[index ^ 1]->findNearest(x), *candidate);
+                const auto candidate2 = m_child[index ^ 1]->findNearest(x);
+                if (candidate2.second < candidate.second) {
+                    return candidate2;
                 }
             }
-            return *candidate;
+            return candidate;
         }
     };
 
@@ -339,13 +356,13 @@ public:
         }
     }
 
-    const T &findNearest(const T x) const
+    T findNearest(const T x) const
     {
         if (!m_root) {
             throw std::runtime_error(
                 "No values in the KdTree, which is required for findNearest.");
         }
-        return m_root->findNearest(x);
+        return m_root->findNearest(x).first;
     }
 
     friend std::ostream &operator<<(std::ostream &out, const KdTree &tree)
