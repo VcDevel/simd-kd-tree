@@ -34,8 +34,9 @@
 #include "linearsearch.h"
 #include "kdtree.h"
 
-int main() //{{{1
+int main()  // {{{1
 {
+    // settings {{{2
     constexpr int SetSize = 20000;  // required memory ~ SetSize * sizeof(Node)
                                      // ~ SetSize * (sizeof(Point<T>) + 16)
                                      // = SetSize * 32
@@ -44,6 +45,7 @@ int main() //{{{1
     using T = float;
     using Point = ::Point<T, 3>;
 
+    // random points {{{2
     std::default_random_engine randomEngine(1);
     typename std::conditional<std::is_floating_point<T>::value,
                               std::uniform_real_distribution<T>,
@@ -56,7 +58,7 @@ int main() //{{{1
 
     TimeStampCounter tsc;
 
-    tsc.start();
+    tsc.start();  // create KdTree {{{2
     KdTree<Point> pointsTree;
     for (const Point &p : randomPoints) {
         pointsTree.insert(p);
@@ -64,7 +66,7 @@ int main() //{{{1
     tsc.stop();
     const auto kdtree_inserts = tsc.cycles();
 
-    tsc.start();
+    tsc.start();  // create KdTreeV {{{2
     KdTreeV<Point> pointsTreeV;
     for (const Point &p : randomPoints) {
         pointsTreeV.insert(p);
@@ -73,7 +75,7 @@ int main() //{{{1
     const auto kdtreev_inserts = tsc.cycles();
     //std::cout << pointsTreeV << '\n';
 
-    tsc.start();
+    tsc.start();  // create LinearNeighborSearch {{{2
     LinearNeighborSearch<Point> pointsVector(SetSize);
     for (const Point &p : randomPoints) {
         pointsVector.insert(p);
@@ -81,7 +83,7 @@ int main() //{{{1
     tsc.stop();
     const auto linear_inserts = tsc.cycles();
 
-    tsc.start();
+    tsc.start();  // create LinearNeighborSearchV {{{2
     LinearNeighborSearchV<Point> linearSearchV(SetSize);
     for (const Point &p : randomPoints) {
         linearSearchV.insert(p);
@@ -89,6 +91,7 @@ int main() //{{{1
     tsc.stop();
     const auto linearv_inserts = tsc.cycles();
 
+    // print insert timings {{{2
     std::cout << "             KdTree    KdTreeV  LinearNeighborSearch  LinearNeighborSearchV  KdTree/KdTreeV  "
                  "Linear/KdTree  Linear/LinearV\n";
     std::cout << "inserts "
@@ -98,13 +101,14 @@ int main() //{{{1
               << std::setw(23) << linearv_inserts
               << std::setw(16) << double(kdtree_inserts) / double(kdtreev_inserts) << std::endl;
 
+    // random search points {{{2
     std::vector<Point> searchPoints;
     searchPoints.reserve(NumberOfSearches);
     for (int i = 0; i < NumberOfSearches; ++i) {
         searchPoints.emplace_back(uniform(randomEngine), uniform(randomEngine), uniform(randomEngine));
     }
 
-    tsc.start();
+    tsc.start();  // KdTree searches {{{2
     for (int i = 0; i < NumberOfSearches; ++i) {
         const auto &p = searchPoints[i];
         const auto &p2 = pointsTree.findNearest(p);
@@ -114,7 +118,7 @@ int main() //{{{1
     tsc.stop();
     const auto time_kdtree = tsc.cycles();
 
-    tsc.start();
+    tsc.start();  // KdTreeV searches {{{2
     for (int i = 0; i < NumberOfSearches; ++i) {
         const auto &p = searchPoints[i];
         const auto &p2 = pointsTreeV.findNearest(p);
@@ -124,7 +128,7 @@ int main() //{{{1
     tsc.stop();
     const auto time_kdtreev = tsc.cycles();
 
-    tsc.start();
+    tsc.start();  // LinearNeighborSearch searches {{{2
     for (int i = 0; i < NumberOfSearches; ++i) {
         const auto &p = searchPoints[i];
         const auto &p2 = pointsVector.findNearest(p);
@@ -146,7 +150,7 @@ int main() //{{{1
     tsc.stop();
     const auto time_linear = tsc.cycles();
 
-    tsc.start();
+    tsc.start();  // LinearNeighborSearchV searches {{{2
     for (int i = 0; i < NumberOfSearches; ++i) {
         const auto &p = searchPoints[i];
         const auto &p2 = linearSearchV.findNearest(p);
@@ -163,6 +167,7 @@ int main() //{{{1
     tsc.stop();
     const auto time_linearv = tsc.cycles();
 
+    // print search timings {{{2
     std::cout << "searches"
               << std::setw(11) << time_kdtree
               << std::setw(11) << time_kdtreev
@@ -173,6 +178,6 @@ int main() //{{{1
               << std::setw(16) << double(time_linear) / double(time_linearv) << '\n';
 
     return 0;
-} //}}}1
+} // }}}1
 
 // vim: foldmethod=marker
