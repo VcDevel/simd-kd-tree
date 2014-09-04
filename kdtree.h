@@ -159,7 +159,7 @@ template <typename T, std::size_t Dimensions = std::tuple_size<T>::value> class 
                             candidate.first = simdize_get(
                                 *this, (distance.min() == distance).firstOne());
                         }
-                        if (dx.max() < candidate.second && m_child[1]) {
+                        if (m_child[1] && dx.max() < candidate.second) {
                             const auto candidate2 = m_child[1]->findNearest(x);
                             if (candidate2.second < candidate.second) {
                                 return candidate2;
@@ -178,7 +178,7 @@ template <typename T, std::size_t Dimensions = std::tuple_size<T>::value> class 
                             candidate.first = simdize_get(
                                 *this, (distance.min() == distance).firstOne());
                         }
-                        if (dx.max() < candidate.second && m_child[0]) {
+                        if (m_child[0] && dx.max() < candidate.second) {
                             const auto candidate2 = m_child[0]->findNearest(x);
                             if (candidate2.second < candidate.second) {
                                 return candidate2;
