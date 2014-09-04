@@ -142,8 +142,6 @@ template <typename T, std::size_t Dimensions = std::tuple_size<T>::value> class 
         // Node::findNearest {{{2
         std::pair<T, DistanceType> findNearest(const V &x) const
         {
-            using namespace std;
-
             // if we have a child on the "wrong" side it could still contain the
             // nearest neighbor, but only if the shortest distance of the search point
             // x to the splitting plane is less than the distance to the current
@@ -151,40 +149,62 @@ template <typename T, std::size_t Dimensions = std::tuple_size<T>::value> class 
             const auto dx = get_kdtree_1dim_distance<SplittingPlane>(x, *this);
 
             const auto less = get_kdtree_value<SplittingPlane>(*this) < get_kdtree_value<SplittingPlane>(x);
-            const auto distance = get_kdtree_distance(x, *this);
-            const auto pos = (distance.min() == distance).firstOne();
-            T candidate = simdize_get(*this, pos);
-            auto bestDistance = distance[pos];
-            auto recurseChild = [&](const ChildPtr &child) {
-                if (child) {
-                    const auto candidateFromChild = child->findNearest(x);
-                    if (candidateFromChild.second < bestDistance) {
-                        candidate = candidateFromChild.first;
-                        bestDistance = candidateFromChild.second;
-                    }
-                }
-            };
             if (all_of(less)) {
-                recurseChild(m_child[0]);
-                if (dx.max() <= bestDistance) {
-                    recurseChild(m_child[1]);
+                if (m_child[0]) {
+                    auto candidate = m_child[0]->findNearest(x);
+                    if (dx.min() < candidate.second) {
+                        const auto distance = get_kdtree_distance(x, *this);
+                        if (distance.min() < candidate.second) {
+                            candidate.second = distance.min();
+                            candidate.first = simdize_get(
+                                *this, (distance.min() == distance).firstOne());
+                        }
+                        if (dx.max() < candidate.second && m_child[1]) {
+                            const auto candidate2 = m_child[1]->findNearest(x);
+                            if (candidate2.second < candidate.second) {
+                                return candidate2;
+                            }
+                        }
+                    }
+                    return candidate;
                 }
             } else if (none_of(less)) {
-                recurseChild(m_child[1]);
-                if (dx.min() <= bestDistance) {
-                    recurseChild(m_child[0]);
-                }
-            } else {
-                const auto bestDx = dx[pos];
-                if (bestDx <= bestDistance) {
-                    recurseChild(m_child[0]);
-                }
-                if (bestDx <= bestDistance) {
-                    recurseChild(m_child[1]);
+                if (m_child[1]) {
+                    auto candidate = m_child[1]->findNearest(x);
+                    if (dx.min() < candidate.second) {
+                        const auto distance = get_kdtree_distance(x, *this);
+                        if (distance.min() < candidate.second) {
+                            candidate.second = distance.min();
+                            candidate.first = simdize_get(
+                                *this, (distance.min() == distance).firstOne());
+                        }
+                        if (dx.max() < candidate.second && m_child[0]) {
+                            const auto candidate2 = m_child[0]->findNearest(x);
+                            if (candidate2.second < candidate.second) {
+                                return candidate2;
+                            }
+                        }
+                    }
+                    return candidate;
                 }
             }
-
-            return std::make_pair(candidate, bestDistance);
+            const auto distance = get_kdtree_distance(x, *this);
+            const int pos = (distance.min() == distance).firstOne();
+            auto candidate = std::make_pair(simdize_get(*this, pos), distance.min());
+            const auto bestDx = dx[pos];
+            if (bestDx <= candidate.second && m_child[0]) {
+                const auto candidate2 = m_child[0]->findNearest(x);
+                if (candidate2.second < candidate.second) {
+                    candidate = candidate2;
+                }
+            }
+            if (bestDx <= candidate.second && m_child[1]) {
+                const auto candidate2 = m_child[1]->findNearest(x);
+                if (candidate2.second < candidate.second) {
+                    return candidate2;
+                }
+            }
+            return candidate;
         }
     };
 
