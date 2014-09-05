@@ -133,8 +133,7 @@ int main()  // {{{1
         const auto &p = searchPoints[i];
         const auto &p2 = pointsVector.findNearest(p);
         asm(""::"m"(p2));
-//#define COMPARE_KDTREE_LINEAR
-#ifdef COMPARE_KDTREE_LINEAR
+#if 0
         const auto &p3 = pointsTree.findNearest(p);
         const auto &p4 = pointsTreeV.findNearest(p);
         if (get_kdtree_distance(p, p2) != get_kdtree_distance(p, p3)) {
@@ -155,8 +154,7 @@ int main()  // {{{1
         const auto &p = searchPoints[i];
         const auto &p2 = linearSearchV.findNearest(p);
         asm(""::"m"(p2));
-//#define COMPARE_KDTREE_LINEAR
-#ifdef COMPARE_KDTREE_LINEAR
+#if 0
         const auto &p4 = pointsTreeV.findNearest(p);
         if (get_kdtree_distance(p, p2) != get_kdtree_distance(p, p4)) {
             std::cerr << p << " failed " << p2 << " (" << get_kdtree_distance(p, p2)
