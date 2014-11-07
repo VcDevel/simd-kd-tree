@@ -214,12 +214,20 @@ public: //{{{2
     KdTreeV() = default; //{{{2
 
     // insert {{{2
-    template <typename U> void insert(U &&x)
+    void insert(T &&x)
     {
         if (m_root) {
-            m_root->insert(std::forward<U>(x));
+            m_root->insert(std::move(x));
         } else {
-            m_root = make_unique<Node<0>>(std::forward<U>(x));
+            m_root = make_unique<Node<0>>(std::move(x));
+        }
+    }
+    void insert(const T &x)
+    {
+        if (m_root) {
+            m_root->insert(x);
+        } else {
+            m_root = make_unique<Node<0>>(x);
         }
     }
 
